@@ -269,6 +269,28 @@ public:
 
 };
 
+class CSourceDarcy final : public CSourceBase_Flow {
+  bool implicit; 			/*!< \brief Implicit calculation. */
+  su2double permeability;	/*!< \brief permeability of the solid media. */
+  su2double Ref_length;
+
+public:
+  /*!
+   * \param[in] val_nDim - Number of dimensions of the problem.
+   * \param[in] val_nVar - Number of variables of the problem.
+   * \param[in] config - Definition of the particular problem.
+   */
+  CSourceDarcy(unsigned short val_nDim, unsigned short val_nVar, const CConfig* config);
+
+  /*!
+   * \brief Source term integration for the Boussinesq approximation.
+   * \param[in] config - Definition of the particular problem.
+   * \return Lightweight const-view of residual and Jacobian.
+   */
+  ResidualType<> ComputeResidual(const CConfig* config) override;
+
+};
+
 /*!
  * \class CSourceWindGust
  * \brief Class for a source term due to a wind gust.

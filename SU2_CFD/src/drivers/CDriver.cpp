@@ -1928,6 +1928,11 @@ void CDriver::Numerics_Preprocessing(CConfig *config, CGeometry **geometry, CSol
       else if (config->GetWind_Gust() == YES) {
         numerics[iMGlevel][FLOW_SOL][source_first_term] = new CSourceWindGust(nDim, nVar_Flow, config);
       }
+      //TODO: add config option
+      else if (incompressible) { //&& (config->GetDarcy_Source() == YES)) {
+        numerics[iMGlevel][FLOW_SOL][source_first_term] = new CSourceDarcy(nDim, nVar_Flow, config);
+      }
+
       else {
         numerics[iMGlevel][FLOW_SOL][source_first_term] = new CSourceNothing(nDim, nVar_Flow, config);
       }

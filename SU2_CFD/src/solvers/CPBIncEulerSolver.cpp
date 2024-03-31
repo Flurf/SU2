@@ -1049,6 +1049,7 @@ void CPBIncEulerSolver::Source_Residual(CGeometry *geometry, CSolver **solver_co
   const bool axisymmetric   = config->GetAxisymmetric();
   const bool gravity        = (config->GetGravityForce() == YES);
   const bool body_force     = config->GetBody_Force();
+  const bool darcy          = true; // TODO: add option to config
 
   su2double **Jacobian_Temp, *Residual_Temp;
 
@@ -1113,6 +1114,48 @@ void CPBIncEulerSolver::Source_Residual(CGeometry *geometry, CSolver **solver_co
   }
 
   if (axisymmetric) {
+
+  }
+
+    if (darcy) {
+
+		unsigned long iPoint;
+
+
+
+	    for (iPoint = 0; iPoint < nPointDomain; iPoint++) {
+	    	numerics->SetDarcyCoeffs(nodes->GetDarcyCoeffs(iPoint),
+	    						     nodes->GetForchheimerCoeffs(iPoint));
+	      /*--- Load the conservative variables ---*/
+	        numerics->SetPrimitive(nodes->GetSolution(iPoint),NULL);
+
+
+	      /*--- Set incompressible density  ---*/
+
+	        numerics->SetDensity(nodes->GetDensity(iPoint),
+	        						0.0);
+
+	        numerics ->SetLaminarViscosity(nodes->GetLaminarViscosity(iPoint),
+	    		  	  	  	  	  	  	 nodes->GetLaminarViscosity(iPoint));
+
+	      /*--- Load the volume of the dual mesh cell ---*/
+
+	        numerics->SetVolume(geometry->nodes->GetVolume(iPoint));
+
+	      /*--- Compute the body force source residual ---*/
+	        auto residual = numerics->ComputeResidual(config);
+
+
+	      /*--- Add the source residual to the total ---*/
+
+	        LinSysRes.AddBlock(iPoint, residual);
+
+	        if (implicit) Jacobian.AddBlock2Diag(iPoint, residual.jacobian_i);
+	    }
+
+//	    END_SU2_OMP_FOR
+
+
 
   }
 }

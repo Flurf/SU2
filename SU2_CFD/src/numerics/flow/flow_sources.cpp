@@ -512,6 +512,49 @@ CNumerics::ResidualType<> CSourceIncRotatingFrame_Flow::ComputeResidual(const CC
   return ResidualType<>(residual, jacobian, nullptr);
 }
 
+CSourceDarcy::CSourceDarcy(unsigned short val_nDim, unsigned short val_nVar, const CConfig* config) :
+                   CSourceBase_Flow(val_nDim, val_nVar, config) {
+
+  implicit = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
+  Ref_length = config->GetRefLength();
+
+}
+
+CNumerics::ResidualType<> CSourceDarcy::ComputeResidual(const CConfig* config) {
+
+  unsigned short iDim,jDim;
+
+
+
+  //Laminar_Viscosity_i D_i[0]V_i[iDim]
+  /*--- Momentum contribution. ---*/
+  for (iDim = 0; iDim < nVar; iDim++)
+    residual[iDim] =  Volume * Ref_length*Ref_length* ((V_i[iDim]  * Laminar_Viscosity_i) * D_i[iDim]);
+
+
+
+
+  if (implicit) {
+
+
+	/*---Diagonal structure for the additional part of the Jacobian---*/
+	  for(iDim = 0; iDim < nVar; iDim++){
+		  for(jDim = 0; jDim < nVar; jDim++){
+			  if (iDim == jDim){
+				  jacobian[iDim][jDim] = (Volume * Ref_length*Ref_length*  D_i[iDim]*Laminar_Viscosity_i);
+			  }
+			  else jacobian[iDim][jDim] = 0;
+		  }
+	  }
+
+
+
+  }
+
+  return ResidualType<>(residual, jacobian, nullptr);
+}
+
+
 CSourceWindGust::CSourceWindGust(unsigned short val_nDim, unsigned short val_nVar, const CConfig* config) :
                  CSourceBase_Flow(val_nDim, val_nVar, config) { }
 
