@@ -32,6 +32,7 @@
 #include "../../include/fluid/CIncIdealGasPolynomial.hpp"
 #include "../../include/variables/CPBIncNSVariable.hpp"
 #include "../../include/solvers/CFVMFlowSolverBase.inl"
+#include "../../../Common/include/adt/CADTPointsOnlyClass.hpp"
 
 template class CFVMFlowSolverBase<CPBIncEulerVariable, INCOMPRESSIBLE>;
 
@@ -175,6 +176,10 @@ CPBIncEulerSolver::CPBIncEulerSolver(CGeometry *geometry, CConfig *config, unsig
 
   /*--- Add the solver name (max 8 characters) ---*/
   SolverName = "INC.FLOW";
+  
+  /*--- Read Darcy and Forchheimer coefficients ---*/
+  /*TODO: read the file if the config contains the porous media definition*/
+  ReadPermeability(config, geometry);
 
 }
 
@@ -2807,3 +2812,162 @@ void CPBIncEulerSolver::Source_Template(CGeometry *geometry, CSolver **solver_co
 
 
 void CPBIncEulerSolver::PrintVerificationError(const CConfig *config) const { }
+
+
+void CPBIncEulerSolver::ReadPermeability(const CConfig *config, CGeometry *geometry) {
+
+  /*--- This routine allows SU2 to read in the coefficients of the
+   Darcy-Darcy-Forchheimer law  from a simple ASCII file in the following
+   format:
+
+   x0, y0, z0, dx0, dy0, dz0, fx0, fy0, fz0
+   x1, y1, z1, dx1, dy1, dz1, fx1, fy1, fz1
+   ...
+   xN, yN, zN, dxN, dyN, dzN, fxN, fyN, fzN
+
+   where x, y, z, are the coordinates of the grid nodes, dx,y,z are the
+   Darcy vector coefficients in the law and fx,y,z are the Forchheimer coefficients.
+   N is the total number of points.  ---*/
+
+  unsigned short iDim;
+  unsigned long iPoint, pointID_0, pointID;
+  unsigned long unmatched = 0, iPoint_Found = 0, iPoint_Ext = 0;
+
+  su2double Coor_External[3] = {0.0,0.0,0.0};
+  su2double D[3] = {0.0,0.0,0.0};
+  su2double F[3] = {0.0,0.0,0.0};
+
+  su2double dist;
+  int rankID;	//MPI
+
+  string filename, text_line;
+  ifstream external_file;
+  ofstream sens_file;
+
+  //if (rank == MASTER_NODE)
+    cout << "Reading Darcy-Forchheimer coefficients from file."<< endl;
+
+  /*--- Get the filename  ---*/
+
+  filename = "darcy.dat";
+  external_file.open(filename.data(), ios::in);
+  if (external_file.fail()) {
+    //SU2_MPI::Error(string("There is no darcy file ") +
+    //               filename, CURRENT_FUNCTION);
+    cout << "There is no darcy file "<< endl;
+  }
+
+  /*--- Allocate the vectors to hold node coordinates and its local ID. ---*/
+
+  vector<su2double>     Coords(nDim*nPointDomain);
+  vector<unsigned long> PointIDs(nPointDomain);
+
+  /*--- Retrieve and store the coordinates of owned interior nodes
+   and their local point IDs. ---*/
+
+  for (iPoint = 0; iPoint < nPointDomain; iPoint++) {
+    PointIDs[iPoint] = iPoint;
+    for (iDim = 0; iDim < nDim; iDim++)
+      Coords[iPoint*nDim + iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+  }
+
+  /*--- Build the ADT of all interior nodes. ---*/
+
+  CADTPointsOnlyClass VertexADT(nDim, nPointDomain,
+                                Coords.data(), PointIDs.data(), true);
+
+  /*--- Loop over all interior mesh nodes owned by this rank and find the
+   matching point with minimum distance. Once we have the match, store the
+   porosity from the file for that node. ---*/
+
+  if (VertexADT.IsEmpty()) {
+
+    //SU2_MPI::Error("No external points given to ADT.", CURRENT_FUNCTION);
+    cout << "No external points given to ADT." << endl;
+  } else {
+
+    /*--- Read the input sensitivity file and locate the point matches
+     using the ADT search, on a line-by-line basis. ---*/
+
+    iPoint_Found = 0; iPoint_Ext  = 0;
+    while (getline (external_file, text_line)) {
+
+      /*--- First, check that the line has 9 * nDim  entries ---*/
+
+      istringstream point_line(text_line);
+      vector<string> tokens((istream_iterator<string>(point_line)),
+                            istream_iterator<string>());
+
+      if (tokens.size() == (3 * nDim + 1)) {
+        istringstream point_line(text_line);
+
+        /*--- Get the coordinates and porosity for this line. ---*/
+
+        for (iDim = 0; iDim < nDim; iDim++) point_line >> Coor_External[iDim];
+        point_line >> pointID;
+        for (iDim = 0; iDim < nDim; iDim++) point_line >> D[iDim];
+        for (iDim = 0; iDim < nDim; iDim++) point_line >> F[iDim];
+
+
+
+
+
+        /*--- Locate the nearest node to this external point. If it is on
+         our rank, then store the sensitivity value. ---*/
+        VertexADT.DetermineNearestNode(&Coor_External[0], dist,
+                                       pointID_0, rankID);
+
+        //if (rankID == rank) {
+
+          /*--- Store coefficients at the matched local node. ---*/
+
+          for (iDim = 0; iDim < nDim; iDim++){
+        	  nodes->SetDarcyForchheimerCoeffs(pointID, iDim, D[iDim], F[iDim]);
+          }
+
+
+
+          /*--- Keep track of how many points we match. ---*/
+
+          iPoint_Found++;
+
+          /*--- Keep track of points with poor matches for reporting. ---*/
+
+          if (dist > 1e-10) unmatched++;
+
+        //}
+
+        /*--- Increment counter for total points in the external file. ---*/
+
+        iPoint_Ext++;
+
+      }
+    }
+
+    /*--- Close the external file. ---*/
+
+    external_file.close();
+
+    /*--- We have not received all nodes in the input file. Throw an error. ---*/
+
+    if ((iPoint_Ext < nPointDomain) && (rank == MASTER_NODE)) {
+    	cout << " Warning: only " << iPoint_Ext
+    			<< " points have assigned coefficients. The remaining "
+				<< nPointDomain - iPoint_Ext
+				<<"will be considered non porous";
+    }
+
+    /*--- Check for points with a poor match and report the count. ---*/
+
+    unsigned long myUnmatched = unmatched; unmatched = 0;
+    //SU2_MPI::Allreduce(&myUnmatched, &unmatched, 1,
+    //                   MPI_UNSIGNED_LONG, MPI_SUM, SU2_MPI::GetComm());
+    if ((unmatched > 0)){ // (rank == MASTER_NODE)) {
+      cout << " Warning: there are " << unmatched;
+      cout << " points with a match distance > 1e-10." << endl;
+    }
+
+  }
+}
+
+

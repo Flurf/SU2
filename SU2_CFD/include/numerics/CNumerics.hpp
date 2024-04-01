@@ -50,6 +50,7 @@ class CFluidModel;
  */
 class CNumerics {
 protected:
+  using VectorType = C2DContainer<unsigned long, su2double, StorageType::ColumnMajor, 64, DynamicSize, 1>;
   enum : size_t {MAXNDIM = 3}; /*!< \brief Max number of space dimensions, used in some static arrays. */
 
   unsigned short nDim, nVar;  /*!< \brief Number of dimensions and variables. */
@@ -218,7 +219,9 @@ protected:
   su2double roughness_i = 0.0,             /*!< \brief Roughness of the wall nearest to point i. */
   roughness_j = 0.0;                       /*!< \brief Roughness of the wall nearest to point j. */
   su2double *l, *m;
-
+  const su2double
+  *D_i,    /*!< \brief Vector of Darcy coefficients at point i. */
+  *F_i;    /*!< \brief Vector of Forchheimer coefficients at point j. */
   su2double **MeanReynoldsStress; /*!< \brief Mean Reynolds stress tensor  */
   su2double **MeanPerturbedRSM;   /*!< \brief Perturbed Reynolds stress tensor  */
   bool using_uq,                  /*!< \brief Flag for UQ methodology  */
@@ -469,6 +472,11 @@ public:
    * \param[in] val_F1_i - Value of the first Menter blending function at point i.
    * \param[in] val_F1_j - Value of the first Menter blending function at point j.
    */
+
+    inline void SetDarcyCoeffs(const su2double *val_D_i, const su2double *val_F_i) {
+    D_i = val_D_i;
+    F_i = val_F_i;
+  }
   virtual void SetF1blending(su2double val_F1_i, su2double val_F1_j) {/* empty */};
 
   /*!

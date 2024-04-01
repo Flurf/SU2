@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include <iterator>
+
 #include "CFVMFlowSolverBase.hpp"
 #include "../variables/CPBIncEulerVariable.hpp"
 
@@ -381,4 +383,8 @@ public:
    */
   su2double GetResMassFlux(void) const { return ResMassFlux; }
 
+    /*!
+   * \brief Read the Darcy and forchheimer coefficients from file for each point in the domain
+   */
+  void ReadPermeability(const CConfig *config, CGeometry *geometry);
 };

@@ -95,6 +95,9 @@ protected:
 
   MatrixType Solution_BGS_k;     /*!< \brief Old solution container for BGS iterations. */
 
+  MatrixType D;               /*!< \brief array of Darcy coefficients for porous media modeling */
+  MatrixType F;               /*!< \brief array of Forchheimer coefficients for porous media modeling. */
+
   su2matrix<int> AD_InputIndex;    /*!< \brief Indices of Solution variables in the adjoint vector. */
   su2matrix<int> AD_OutputIndex;   /*!< \brief Indices of Solution variables in the adjoint vector after having been updated. */
 
@@ -145,6 +148,15 @@ public:
   inline void SetSolution(unsigned long iPoint, const su2double *solution) {
     for (unsigned long iVar = 0; iVar < nVar; iVar++) Solution(iPoint,iVar) = solution[iVar];
   }
+
+    inline void SetDarcyForchheimerCoeffs(unsigned long iPoint, unsigned short iDim, su2double darcy, su2double forchheimer) {
+    	D(iPoint,iDim) = darcy;
+    	F(iPoint,iDim) = forchheimer;
+  }
+
+  inline const su2double *GetDarcyCoeffs(unsigned long iPoint) const { return D[iPoint]; }
+  inline const su2double *GetForchheimerCoeffs(unsigned long iPoint) const { return F[iPoint]; }
+
 
   /*!
    * \brief Set the value of the solution, one variable.

@@ -45,6 +45,14 @@ CPBIncNSVariable::CPBIncNSVariable(su2double val_density, su2double val_pressure
   StrainMag.resize(nPoint);
   DES_LengthScale.resize(nPoint) = su2double(0.0);
   Max_Lambda_Visc.resize(nPoint);
+
+  /*--- assign size of porous media arrays---*/
+  //if (config->GetDarcy_Source() || config->GetDarcyForchheimer_Source()){
+	  D.resize(nPoint,nDim)= su2double(0.0);
+	  F.resize(nPoint,nDim)= su2double(0.0);
+  //}
+
+
 }
 
 bool CPBIncNSVariable::SetPrimVar(unsigned long iPoint, su2double Density_Inf, su2double Viscosity_Inf, su2double eddy_visc, su2double turb_ke, CConfig *config) {
