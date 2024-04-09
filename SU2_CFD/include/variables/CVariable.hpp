@@ -157,6 +157,9 @@ public:
   inline const su2double *GetDarcyCoeffs(unsigned long iPoint) const { return D[iPoint]; }
   inline const su2double *GetForchheimerCoeffs(unsigned long iPoint) const { return F[iPoint]; }
 
+  inline const su2double GetDarcyCoeff(unsigned long iPoint, unsigned short iDim) const { return D[iPoint][iDim]; }
+  inline const su2double GetForchheimerCoeff(unsigned long iPoint, unsigned short iDim) const { return F[iPoint][iDim]; }
+
 
   /*!
    * \brief Set the value of the solution, one variable.

@@ -2820,13 +2820,14 @@ void CPBIncEulerSolver::ReadPermeability(const CConfig *config, CGeometry *geome
    Darcy-Darcy-Forchheimer law  from a simple ASCII file in the following
    format:
 
-   x0, y0, z0, dx0, dy0, dz0, fx0, fy0, fz0
-   x1, y1, z1, dx1, dy1, dz1, fx1, fy1, fz1
-   ...
-   xN, yN, zN, dxN, dyN, dzN, fxN, fyN, fzN
 
-   where x, y, z, are the coordinates of the grid nodes, dx,y,z are the
-   Darcy vector coefficients in the law and fx,y,z are the Forchheimer coefficients.
+   x0, y0, z0, ID_0, dx0, dy0, dz0, fx0, fy0, fz0
+   x1, y1, z1, ID_1, dx1, dy1, dz1, fx1, fy1, fz1
+   ...
+   xN, yN, zN, ID_N, dxN, dyN, dzN, fxN, fyN, fzN
+
+   where x, y, z, are the coordinates of the grid nodes, ID is the identifying ID of the node,
+   dx,y,z are the Darcy vector coefficients in the law and fx,y,z are the Forchheimer coefficients.
    N is the total number of points.  ---*/
 
   unsigned short iDim;
@@ -2922,7 +2923,7 @@ void CPBIncEulerSolver::ReadPermeability(const CConfig *config, CGeometry *geome
           /*--- Store coefficients at the matched local node. ---*/
 
           for (iDim = 0; iDim < nDim; iDim++){
-        	  nodes->SetDarcyForchheimerCoeffs(pointID, iDim, D[iDim], F[iDim]);
+        	  nodes->SetDarcyForchheimerCoeffs(pointID_0, iDim, D[iDim], F[iDim]);
           }
 
 
