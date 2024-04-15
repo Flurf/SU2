@@ -387,4 +387,9 @@ public:
    * \brief Read the Darcy and forchheimer coefficients from file for each point in the domain
    */
   void ReadPermeability(const CConfig *config, CGeometry *geometry);
+
+      /*!
+   * \brief Read the Initial Pressure field from file to improve rate of convergence in a free flow-porous media simulation
+   */
+  void SetInitialPressure(const CConfig *config, CGeometry *geometry);
 };

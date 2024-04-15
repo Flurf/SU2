@@ -167,6 +167,7 @@ CPBIncEulerSolver::CPBIncEulerSolver(CGeometry *geometry, CConfig *config, unsig
    PseudoTimeCorr.resize(nEdge,nDim) = su2double(0.0);
    TimeMarchingCorr_n.resize(nEdge,nDim) = su2double(0.0);
    TimeMarchingCorr_n1.resize(nEdge,nDim) = su2double(0.0);
+   if(true) SetInitialPressure(config,geometry);
 
   /*--- Initial comms. ---*/
 
@@ -1225,6 +1226,7 @@ void CPBIncEulerSolver::ImplicitEuler_Iteration(CGeometry *geometry, CSolver **s
   unsigned short iVar, iDim;
   unsigned long iPoint, total_index, IterLinSol = 0;
   su2double Delta, *local_Res_TruncError, Vol,Mom_Coeff[3];
+  su2double timestep;
 
   /*--- Set maximum residual to zero ---*/
 
@@ -1248,13 +1250,14 @@ void CPBIncEulerSolver::ImplicitEuler_Iteration(CGeometry *geometry, CSolver **s
       }
       LinSysRes.SetBlock_Zero(iPoint);
     }
-
+    timestep = nodes->GetDelta_Time(iPoint);
+    if(nodes->GetDarcyCoeff(iPoint,0) != 0.0) timestep = timestep/100000.0;
     /*--- Read the volume ---*/
     Vol = (geometry->nodes->GetVolume(iPoint) +
            geometry->nodes->GetPeriodicVolume(iPoint));
 
     if (nodes->GetDelta_Time(iPoint) != 0.0) {
-      Delta = Vol / nodes->GetDelta_Time(iPoint);
+      Delta = Vol / timestep;///(1 + nodes->GetLaminarViscosity(iPoint)*nodes->GetDarcyCoeff(iPoint,0)/1000));
       Jacobian.AddVal2Diag(iPoint, Delta);
     } else {
       Jacobian.SetVal2Diag(iPoint, 1.0);
@@ -2956,6 +2959,160 @@ void CPBIncEulerSolver::ReadPermeability(const CConfig *config, CGeometry *geome
     			<< " points have assigned coefficients. The remaining "
 				<< nPointDomain - iPoint_Ext
 				<<"will be considered non porous";
+    }
+
+    /*--- Check for points with a poor match and report the count. ---*/
+
+    unsigned long myUnmatched = unmatched; unmatched = 0;
+    //SU2_MPI::Allreduce(&myUnmatched, &unmatched, 1,
+    //                   MPI_UNSIGNED_LONG, MPI_SUM, SU2_MPI::GetComm());
+    if ((unmatched > 0)){ // (rank == MASTER_NODE)) {
+      cout << " Warning: there are " << unmatched;
+      cout << " points with a match distance > 1e-10." << endl;
+    }
+
+  }
+}
+
+
+void CPBIncEulerSolver::SetInitialPressure(const CConfig *config, CGeometry *geometry) {
+
+  /*--- 
+   format:
+
+
+   x0, y0, z0, ID_0, P0
+   x1, y1, z1, ID_1, P1
+   ...
+   xN, yN, zN, ID_N, PN
+
+   where x, y, z, are the coordinates of the grid nodes, ID is the identifying ID of the node,
+   P is the initial pressure value.  ---*/
+
+  unsigned short iDim;
+  unsigned long iPoint, pointID_0, pointID;
+  unsigned long unmatched = 0, iPoint_Found = 0, iPoint_Ext = 0;
+
+  su2double Coor_External[3] = {0.0,0.0,0.0};
+  su2double P = 0;
+
+  su2double dist;
+  int rankID;	//MPI
+
+  string filename, text_line;
+  ifstream external_file;
+  ofstream sens_file;
+
+  //if (rank == MASTER_NODE)
+    cout << "Reading initial pressure field from file."<< endl;
+
+  /*--- Get the filename  ---*/
+
+  filename = "P.dat";
+  external_file.open(filename.data(), ios::in);
+  if (external_file.fail()) {
+    //SU2_MPI::Error(string("There is no pressure file ") +
+    //               filename, CURRENT_FUNCTION);
+    cout << "There is no pressure file "<< endl;
+  }
+
+  /*--- Allocate the vectors to hold node coordinates and its local ID. ---*/
+
+  vector<su2double>     Coords(nDim*nPointDomain);
+  vector<unsigned long> PointIDs(nPointDomain);
+
+  /*--- Retrieve and store the coordinates of owned interior nodes
+   and their local point IDs. ---*/
+
+  for (iPoint = 0; iPoint < nPointDomain; iPoint++) {
+    PointIDs[iPoint] = iPoint;
+    for (iDim = 0; iDim < nDim; iDim++)
+      Coords[iPoint*nDim + iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+  }
+
+  /*--- Build the ADT of all interior nodes. ---*/
+
+  CADTPointsOnlyClass VertexADT(nDim, nPointDomain,
+                                Coords.data(), PointIDs.data(), true);
+
+  /*--- Loop over all interior mesh nodes owned by this rank and find the
+   matching point with minimum distance. Once we have the match, store the
+   porosity from the file for that node. ---*/
+
+  if (VertexADT.IsEmpty()) {
+
+    //SU2_MPI::Error("No external points given to ADT.", CURRENT_FUNCTION);
+    cout << "No external points given to ADT." << endl;
+  } else {
+
+    /*--- Read the input sensitivity file and locate the point matches
+     using the ADT search, on a line-by-line basis. ---*/
+
+    iPoint_Found = 0; iPoint_Ext  = 0;
+    while (getline (external_file, text_line)) {
+
+      /*--- First, check that the line has nDim + 2  entries ---*/
+
+      istringstream point_line(text_line);
+      vector<string> tokens((istream_iterator<string>(point_line)),
+                            istream_iterator<string>());
+
+      if (tokens.size() == (nDim + 2)) {
+        istringstream point_line(text_line);
+
+        /*--- Get the coordinates and pressure for this line. ---*/
+
+        for (iDim = 0; iDim < nDim; iDim++) point_line >> Coor_External[iDim];
+        point_line >> pointID;
+        point_line >> P;
+
+
+
+
+
+        /*--- Locate the nearest node to this external point. If it is on
+         our rank, then store the sensitivity value. ---*/
+        VertexADT.DetermineNearestNode(&Coor_External[0], dist,
+                                       pointID_0, rankID);
+
+        //if (rankID == rank) {
+
+          /*--- set pressure at the matched local node. ---*/
+
+          for (iDim = 0; iDim < nDim; iDim++){
+        	  nodes->SetPressure_val(pointID_0,P);
+          }
+
+
+
+          /*--- Keep track of how many points we match. ---*/
+
+          iPoint_Found++;
+
+          /*--- Keep track of points with poor matches for reporting. ---*/
+
+          if (dist > 1e-10) unmatched++;
+
+        //}
+
+        /*--- Increment counter for total points in the external file. ---*/
+
+        iPoint_Ext++;
+
+      }
+    }
+
+    /*--- Close the external file. ---*/
+
+    external_file.close();
+
+    /*--- We have not received all nodes in the input file. Throw an error. ---*/
+
+    if ((iPoint_Ext < nPointDomain) && (rank == MASTER_NODE)) {
+    	cout << " Warning: only " << iPoint_Ext
+    			<< " points have assigned coefficients. The remaining "
+				<< nPointDomain - iPoint_Ext
+				<<"will be considered non porous" << endl;
     }
 
     /*--- Check for points with a poor match and report the count. ---*/
